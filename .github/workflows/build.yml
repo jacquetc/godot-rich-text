@@ -150,6 +150,11 @@ jobs:
           fi
           echo "Version validated: $CARGO_VERSION"
 
+      - name: Copy LICENSE and README to addon folder
+        run: |
+          cp LICENSE godot/addons/godot_rich_text/
+          cp README.md godot/addons/godot_rich_text/
+
       - name: Create addon structure
         run: |
           mkdir -p pkg/addons/godot_rich_text/bin
@@ -157,8 +162,8 @@ jobs:
 
           cp godot/addons/godot_rich_text/godot_rich_text.gdextension pkg/addons/godot_rich_text/
           cp godot/addons/godot_rich_text/icons/*.svg pkg/addons/godot_rich_text/icons/ 2>/dev/null || true
-          cp LICENSE pkg/addons/godot_rich_text/
-          cp README.md pkg/addons/godot_rich_text/
+          cp godot/addons/godot_rich_text/LICENSE pkg/addons/godot_rich_text/
+          cp godot/addons/godot_rich_text/README.md pkg/addons/godot_rich_text/
 
       - name: Download Linux binary
         uses: actions/download-artifact@v4

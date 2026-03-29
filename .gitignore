@@ -3,6 +3,8 @@ godot/.godot/
 godot/addons/godot_rich_text/bin/*.so
 godot/addons/godot_rich_text/bin/*.dll
 godot/addons/godot_rich_text/bin/*.dylib
+godot/addons/godot_rich_text/LICENSE
+godot/addons/godot_rich_text/README.md
 
 
 # C++ objects and libs
