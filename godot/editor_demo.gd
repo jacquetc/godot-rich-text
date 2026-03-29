@@ -5,10 +5,11 @@
 ## it for your own project.
 extends Control
 
+enum CtxItem { CUT, COPY, PASTE, SELECT_ALL, UNDO, REDO }
+
 var editor: RichTextEdit
 var btn_bold: Button
 var btn_italic: Button
-
 var btn_underline: Button
 var btn_strike: Button
 var heading_picker: OptionButton
@@ -28,8 +29,6 @@ var context_menu: PopupMenu
 
 ## Prevent toolbar state updates from re-triggering button signals.
 var _updating_toolbar := false
-
-enum CtxItem { CUT, COPY, PASTE, SELECT_ALL, UNDO, REDO }
 
 
 func _ready() -> void:
@@ -112,31 +111,38 @@ func _on_bold(pressed: bool) -> void:
 		return
 	editor.set_bold(pressed)
 
+
 func _on_italic(pressed: bool) -> void:
 	if _updating_toolbar:
 		return
 	editor.set_italic(pressed)
+
 
 func _on_underline(pressed: bool) -> void:
 	if _updating_toolbar:
 		return
 	editor.set_underline(pressed)
 
+
 func _on_strike(pressed: bool) -> void:
 	if _updating_toolbar:
 		return
 	editor.set_strikethrough(pressed)
+
 
 func _on_heading_selected(index: int) -> void:
 	if _updating_toolbar:
 		return
 	editor.set_heading_level(heading_picker.get_item_id(index))
 
+
 func _on_list_bullet() -> void:
 	editor.insert_list(false)
 
+
 func _on_list_number() -> void:
 	editor.insert_list(true)
+
 
 func _on_table_insert() -> void:
 	editor.insert_table(3, 3)
@@ -168,6 +174,7 @@ func _update_toolbar_state() -> void:
 	btn_table_remove.disabled = !in_table
 	_updating_toolbar = false
 
+
 func _on_undo_redo_changed(can_undo: bool, can_redo: bool) -> void:
 	btn_undo.disabled = !can_undo
 	btn_redo.disabled = !can_redo
@@ -182,6 +189,7 @@ func _input(event: InputEvent) -> void:
 			if editor.get_rect().has_point(local + editor.position):
 				_show_context_menu(event.global_position)
 				get_viewport().set_input_as_handled()
+
 
 func _show_context_menu(pos: Vector2) -> void:
 	context_menu.clear()
@@ -203,6 +211,7 @@ func _show_context_menu(pos: Vector2) -> void:
 
 	context_menu.position = Vector2i(pos)
 	context_menu.popup()
+
 
 func _on_context_item(id: int) -> void:
 	match id:
