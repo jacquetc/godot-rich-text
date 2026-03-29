@@ -594,9 +594,7 @@ impl RichTextView {
             InputAction::SelectDocStart => {
                 self.move_cursor(MoveOperation::Start, MoveMode::KeepAnchor)
             }
-            InputAction::SelectDocEnd => {
-                self.move_cursor(MoveOperation::End, MoveMode::KeepAnchor)
-            }
+            InputAction::SelectDocEnd => self.move_cursor(MoveOperation::End, MoveMode::KeepAnchor),
             InputAction::SelectAll => {
                 if let Some(cursor) = &self.cursor {
                     cursor.select(SelectionType::Document);
@@ -769,11 +767,7 @@ impl RichTextView {
 
     fn update_scrollbar(&mut self) {
         let size = self.base().get_size();
-        let zoom = self
-            .typesetter
-            .as_ref()
-            .map(|ts| ts.zoom())
-            .unwrap_or(1.0) as f64;
+        let zoom = self.typesetter.as_ref().map(|ts| ts.zoom()).unwrap_or(1.0) as f64;
         let content_height = self
             .typesetter
             .as_ref()

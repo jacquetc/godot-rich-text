@@ -447,11 +447,7 @@ impl IControl for RichTextEdit {
         let mut atlas_tex = self.atlas_texture.take();
         let mut img_cache = std::mem::take(&mut self.image_cache);
         let doc = self.document.clone();
-        let zoom = self
-            .typesetter
-            .as_ref()
-            .map(|ts| ts.zoom())
-            .unwrap_or(1.0);
+        let zoom = self.typesetter.as_ref().map(|ts| ts.zoom()).unwrap_or(1.0);
         let h_off = self.h_scroll_offset * zoom;
         let content_dirty = self.content_dirty;
         self.content_dirty = false;
@@ -690,9 +686,7 @@ impl IControl for RichTextEdit {
             InputAction::SelectDocStart => {
                 self.move_cursor(MoveOperation::Start, MoveMode::KeepAnchor)
             }
-            InputAction::SelectDocEnd => {
-                self.move_cursor(MoveOperation::End, MoveMode::KeepAnchor)
-            }
+            InputAction::SelectDocEnd => self.move_cursor(MoveOperation::End, MoveMode::KeepAnchor),
             InputAction::SelectAll => {
                 if let Some(cursor) = &self.cursor {
                     let level = self.select_all_level + 1;
@@ -1543,10 +1537,7 @@ impl RichTextEdit {
                         FlowElement::Table(t) => {
                             if let Some(cell) = t.cell(0, 0) {
                                 if let Some(block) = cell.blocks().first() {
-                                    cursor.set_position(
-                                        block.position(),
-                                        MoveMode::MoveAnchor,
-                                    );
+                                    cursor.set_position(block.position(), MoveMode::MoveAnchor);
                                     self.update_cursor_display();
                                     return;
                                 }
@@ -1570,7 +1561,10 @@ impl RichTextEdit {
             let caret = ts.caret_rect(cursor.position());
             // caret is [x, y, w, h] in screen-space (scroll-adjusted)
             // Convert to global screen position for IME
-            let local_pos = Vector2::new(caret[0] - self.h_scroll_offset * ts.zoom(), caret[1] + caret[3]);
+            let local_pos = Vector2::new(
+                caret[0] - self.h_scroll_offset * ts.zoom(),
+                caret[1] + caret[3],
+            );
             let global_pos = self.base().get_global_transform() * local_pos;
             DisplayServer::singleton().window_set_ime_position(godot::builtin::Vector2i::new(
                 global_pos.x as i32,
@@ -1723,7 +1717,10 @@ impl RichTextEdit {
     /// Build the `(table_id, row, col)` vec for the typesetter from cursor state.
     fn build_selected_cells(cursor: &TextCursor) -> Vec<(usize, usize, usize)> {
         match cursor.selection_kind() {
-            SelectionKind::Cells(range) | SelectionKind::Mixed { cell_range: range, .. } => {
+            SelectionKind::Cells(range)
+            | SelectionKind::Mixed {
+                cell_range: range, ..
+            } => {
                 let mut cells = Vec::new();
                 for row in range.start_row..=range.end_row {
                     for col in range.start_col..=range.end_col {
@@ -1735,7 +1732,6 @@ impl RichTextEdit {
             _ => Vec::new(),
         }
     }
-
 
     /// Try to start or extend a rectangular cell selection.
     ///
@@ -1786,9 +1782,9 @@ impl RichTextEdit {
 
         // Only activate cell selection when moving out of the cell boundary
         let should_activate = match (dcol, drow) {
-            (-1, 0) => at_start && cell_ref.column > 0,     // left at start of cell
+            (-1, 0) => at_start && cell_ref.column > 0, // left at start of cell
             (1, 0) => at_end && cell_ref.column + 1 < cell_ref.table.columns(), // right at end
-            (0, -1) => at_start && cell_ref.row > 0,        // up at start of cell
+            (0, -1) => at_start && cell_ref.row > 0,    // up at start of cell
             (0, 1) => at_end && cell_ref.row + 1 < cell_ref.table.rows(), // down at end
             _ => false,
         };
@@ -1985,11 +1981,7 @@ impl RichTextEdit {
 
     fn update_scrollbar(&mut self) {
         let size = self.base().get_size();
-        let zoom = self
-            .typesetter
-            .as_ref()
-            .map(|ts| ts.zoom())
-            .unwrap_or(1.0) as f64;
+        let zoom = self.typesetter.as_ref().map(|ts| ts.zoom()).unwrap_or(1.0) as f64;
         let content_height = self
             .typesetter
             .as_ref()
