@@ -1,0 +1,11 @@
+name: 'Strip path dependencies'
+description: 'Remove path attributes from Cargo.toml so dependencies resolve from crates.io'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Strip path dependencies from Cargo.toml
+      shell: bash
+      run: |
+        sed -i.bak -e 's/path = "[^"]*", //' -e 's/, path = "[^"]*"//' Cargo.toml
+        rm -f Cargo.toml.bak

@@ -5,39 +5,42 @@ on:
     tags:
       - 'v*'
   pull_request:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
-  # Pin sibling crate versions for reproducible builds.
-  # Update these when upgrading text-document or text-typeset.
-  TEXT_DOCUMENT_REF: main
-  TEXT_TYPESET_REF: main
 
 jobs:
   # ── Lint & test ──────────────────────────────────────────────
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: jacquetc/text-document
-          path: ../text-document
-          ref: ${{ env.TEXT_DOCUMENT_REF }}
-      - uses: actions/checkout@v4
-        with:
-          repository: jacquetc/text-typeset
-          path: ../text-typeset
-          ref: ${{ env.TEXT_TYPESET_REF }}
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Strip path dependencies
+        uses: ./.github/actions/strip-path-deps
+
       - name: Format check
         run: cargo fmt --check
+
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings -A deprecated
+
       - name: Test
         run: cargo test
 
@@ -66,30 +69,20 @@ jobs:
             release_name: libgodot_rich_text.macos.aarch64.dylib
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: jacquetc/text-document
-          path: ../text-document
-          ref: ${{ env.TEXT_DOCUMENT_REF }}
-      - uses: actions/checkout@v4
-        with:
-          repository: jacquetc/text-typeset
-          path: ../text-typeset
-          ref: ${{ env.TEXT_TYPESET_REF }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: build-${{ matrix.target }}
+
+      - name: Strip path dependencies
+        uses: ./.github/actions/strip-path-deps
 
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
@@ -104,6 +97,7 @@ jobs:
   macos-universal:
     needs: build
     runs-on: macos-latest
+    timeout-minutes: 10
     steps:
       - name: Download x86_64
         uses: actions/download-artifact@v4
@@ -134,10 +128,27 @@ jobs:
     needs: [build, macos-universal]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Strip path dependencies
+        uses: ./.github/actions/strip-path-deps
+
+      - name: Verify version matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "godot-rich-text") | .version')
+          if [[ "$TAG_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+          echo "Version validated: $CARGO_VERSION"
 
       - name: Create addon structure
         run: |
@@ -171,7 +182,7 @@ jobs:
       - run: cp tmp/macos/libgodot_rich_text.macos.release.universal.dylib pkg/addons/godot_rich_text/bin/
 
       - name: List release contents
-        run: find pkg/ -type f | sort
+        run: ls -lhR pkg/
 
       - name: Create release archive
         run: |
