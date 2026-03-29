@@ -125,7 +125,7 @@ pub struct RichTextEdit {
     pending_undo_redo: Option<(bool, bool)>,
     /// Block ID from last incremental relayout (for incremental render).
     last_relayout_block_id: Option<usize>,
-    /// Buffered character input — flushed as one insert at start of process().
+    /// Buffered character input, flushed as one insert at start of process().
     pending_chars: String,
     /// Ctrl+A escalation level: 0=none, 1=cell content, 2=cell, 3=table, then document.
     select_all_level: u8,
@@ -373,7 +373,7 @@ impl IControl for RichTextEdit {
                 self.last_relayout_block_id = None;
             } else if let Some(&last_pos) = incremental_positions.last() {
                 // Multiple keystrokes in one frame all edit the same block.
-                // The DB already has the final state — only relayout once.
+                // The DB already has the final state, only relayout once.
                 if let Some(snap) = doc.snapshot_block_at_position(last_pos) {
                     let block_id = snap.block_id;
                     let params = text_typeset::bridge::convert_block(&snap);
@@ -390,7 +390,7 @@ impl IControl for RichTextEdit {
             self.debounce_timer = 0.0;
         }
 
-        // Update cursor display after any layout changes (immediate — cheap)
+        // Update cursor display after any layout changes (immediate, cheap)
         if self.needs_redraw {
             self.update_cursor_display();
             self.ensure_caret_h_visible();
@@ -419,12 +419,12 @@ impl IControl for RichTextEdit {
             }
         }
 
-        // document_loaded is a one-shot event — emit immediately
+        // document_loaded is a one-shot event, emit immediately
         if emit_document_loaded {
             self.base_mut().emit_signal("document_loaded", &[]);
         }
 
-        // Caret blink — only triggers cursor-only redraw, not full content render
+        // Caret blink: only triggers cursor-only redraw, not full content render
         let has_focus = self.base().has_focus();
         if self.editable && self.caret_blink && has_focus {
             self.caret_timer += delta;
@@ -759,7 +759,7 @@ impl IControl for RichTextEdit {
             InputAction::ToggleItalic => self.toggle_italic(),
             InputAction::ToggleUnderline => self.toggle_underline(),
 
-            // Mouse — click counting for single/double/triple click
+            // Mouse: click counting for single/double/triple click
             InputAction::Click { position } => {
                 let now = godot::classes::Time::singleton().get_ticks_msec() as f64 / 1000.0;
                 let dist = (position - self.last_click_pos).length();
@@ -819,7 +819,7 @@ impl IControl for RichTextEdit {
                 return;
             }
 
-            // Scroll — handle and return early (don't snap viewport back to caret)
+            // Scroll: handle and return early (don't snap viewport back to caret)
             InputAction::ScrollUp => {
                 self.scroll_by(-40.0);
                 self.base_mut().accept_event();
@@ -1775,7 +1775,7 @@ impl RichTextEdit {
             return true;
         }
 
-        // Not yet in cell selection — check if cursor is at cell boundary
+        // Not yet in cell selection: check if cursor is at cell boundary
         let cell_ref = match cursor.current_table_cell() {
             Some(c) => c,
             None => return false,
@@ -1821,11 +1821,11 @@ impl RichTextEdit {
 
         // Auto-scroll if mouse is near/past viewport edges
         if mouse_pos.y < auto_scroll_margin {
-            // Mouse above viewport — scroll up
+            // Mouse above viewport, scroll up
             let intensity = (auto_scroll_margin - mouse_pos.y) / auto_scroll_margin;
             self.scroll_by(-auto_scroll_speed * intensity);
         } else if mouse_pos.y > view_height - auto_scroll_margin {
-            // Mouse below viewport — scroll down
+            // Mouse below viewport, scroll down
             let intensity = (mouse_pos.y - (view_height - auto_scroll_margin)) / auto_scroll_margin;
             self.scroll_by(auto_scroll_speed * intensity);
         }

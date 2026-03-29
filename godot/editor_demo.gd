@@ -1,7 +1,7 @@
 ## Example: toolbar and context menu for RichTextEdit.
 ##
 ## This script demonstrates how to build UI chrome around the low-level
-## RichTextEdit control. It is NOT part of the extension — copy and adapt
+## RichTextEdit control. It is NOT part of the extension, copy and adapt
 ## it for your own project.
 extends Control
 
@@ -62,7 +62,7 @@ func _ready() -> void:
 		btn.focus_mode = Control.FOCUS_NONE
 	heading_picker.focus_mode = Control.FOCUS_NONE
 
-	# Toolbar connections — use toggled for toggle buttons
+	# Toolbar connections: use toggled for toggle buttons
 	btn_bold.toggled.connect(_on_bold)
 	btn_italic.toggled.connect(_on_italic)
 	btn_underline.toggled.connect(_on_underline)

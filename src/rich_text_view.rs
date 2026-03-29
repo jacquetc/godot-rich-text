@@ -19,7 +19,7 @@ use crate::input::{self, InputAction};
 use crate::rich_text_edit::WrapMode;
 
 // ---------------------------------------------------------------------------
-// RichTextView — read-only rich text display
+// RichTextView - read-only rich text display
 // ---------------------------------------------------------------------------
 
 #[derive(GodotClass)]

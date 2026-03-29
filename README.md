@@ -2,11 +2,16 @@
 
 A GDExtension plugin that provides rich text editing and display controls for Godot 4.3+, written in Rust using [gdext](https://github.com/godot-rust/gdext).
 
-Built on top of `text-document` and `text-typeset` for document modeling and text layout.
+Built on top of `text-document` (a QTextDocument-like rich document model) and `text-typeset` for document modeling and text layout. The Godot-facing API is a simplified, GDScript-friendly adaptation of what `text-document` offers internally. Not all of its features are exposed.
+
+This extension has two goals:
+
+- Offer Godot a nice rich text editor/viewer.
+- Serve as a visual test frontend for the development of `text-document` and `text-typeset`. Most bugs and edge cases will have their origins in these Rust crates. There are still rough edges. Bug reports are very welcome!
 
 ## Features
 
-- **RichTextEdit** — A fully editable rich text control with:
+- **RichTextEdit**: A fully editable rich text control with:
   - Inline formatting toggles: bold, italic, underline, strikethrough
   - Headings, bullet lists, numbered lists (via API)
   - Table support: insert, add/remove rows and columns
@@ -16,7 +21,7 @@ Built on top of `text-document` and `text-typeset` for document modeling and tex
   - Undo/redo
   - Caret blinking, zoom, word wrap, horizontal and vertical scrolling
 
-- **RichTextView** — A read-only rich text display control with:
+- **RichTextView**: A read-only rich text display control with:
   - Optional text selection and copy
   - Clickable links and images (via signals)
   - Zoom, word wrap, vertical scrolling
@@ -83,21 +88,21 @@ Both controls expose the following in the inspector:
 ### Signals
 
 **RichTextEdit:**
-- `text_changed()` — Content was modified
-- `format_changed()` — Formatting at caret position changed
-- `caret_changed()` — Caret moved
-- `selection_changed()` — Selection changed
-- `link_clicked(url)` — A link was clicked
-- `image_clicked(name)` — An inline image was clicked
-- `undo_redo_changed(can_undo, can_redo)` — Undo/redo state changed
-- `document_loaded()` — Async document load (e.g. markdown/HTML parse) finished
+- `text_changed()`: Content was modified
+- `format_changed()`: Formatting at caret position changed
+- `caret_changed()`: Caret moved
+- `selection_changed()`: Selection changed
+- `link_clicked(url)`: A link was clicked
+- `image_clicked(name)`: An inline image was clicked
+- `undo_redo_changed(can_undo, can_redo)`: Undo/redo state changed
+- `document_loaded()`: Async document load (e.g. markdown/HTML parse) finished
 
 **RichTextView:**
-- `link_clicked(url)` — A link was clicked
-- `image_clicked(name)` — An inline image was clicked
-- `document_loaded()` — Async document load finished
-- `selection_changed()` — Selection changed (when `selectable` is enabled)
+- `link_clicked(url)`: A link was clicked
+- `image_clicked(name)`: An inline image was clicked
+- `document_loaded()`: Async document load finished
+- `selection_changed()`: Selection changed (when `selectable` is enabled)
 
 ## License
 
-MPL-2.0 — Copyright (c) 2024-2025 FernTech
+MPL-2.0 - Copyright (c) 2024-2025 FernTech
