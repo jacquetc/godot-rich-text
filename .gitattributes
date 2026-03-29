@@ -1,3 +1,6 @@
+# Normalize line endings for all files that Git considers text files.
+* text=auto eol=lf
+
 # Asset Library: only include the addons/ folder in downloads
 /** export-ignore
 /godot/addons/ !export-ignore
