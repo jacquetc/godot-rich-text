@@ -1535,21 +1535,21 @@ impl RichTextEdit {
                             return;
                         }
                         FlowElement::Table(t) => {
-                            if let Some(cell) = t.cell(0, 0) {
-                                if let Some(block) = cell.blocks().first() {
-                                    cursor.set_position(block.position(), MoveMode::MoveAnchor);
-                                    self.update_cursor_display();
-                                    return;
-                                }
+                            if let Some(cell) = t.cell(0, 0)
+                                && let Some(block) = cell.blocks().first()
+                            {
+                                cursor.set_position(block.position(), MoveMode::MoveAnchor);
+                                self.update_cursor_display();
+                                return;
                             }
                         }
                         _ => {}
                     }
                 }
-                if let FlowElement::Table(t) = element {
-                    if t.id() == table_id {
-                        found = true;
-                    }
+                if let FlowElement::Table(t) = element
+                    && t.id() == table_id
+                {
+                    found = true;
                 }
             }
         }

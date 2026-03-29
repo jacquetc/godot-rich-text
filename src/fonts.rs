@@ -93,10 +93,10 @@ pub fn register_fonts(ts: &mut Typesetter, slots: &FontSlots, default_size: f32)
     // Monospace: user-provided only (no embedded monospace)
     if let Some(font) = slots.monospace {
         ids.monospace = try_register(ts, font);
-        if let Some(id) = ids.monospace {
-            if let Some(name) = ts.font_family_name(id) {
-                ts.set_generic_family("monospace", &name);
-            }
+        if let Some(id) = ids.monospace
+            && let Some(name) = ts.font_family_name(id)
+        {
+            ts.set_generic_family("monospace", &name);
         }
     }
 
