@@ -183,7 +183,6 @@ fn code_block_example() {
 Final paragraph after all elements with <u>underlined words</u> and wrapping text as well here.
 *Powered by text-document & text-typeset.*"
 wrap_mode = 1
-zoom = 1.4500000000000002
 caret_color = Color(0, 0, 0, 1)
 layout_mode = 1
 anchors_preset = 15
