@@ -1,0 +1,14 @@
+[package]
+name = "godot-rich-text"
+version = "0.1.0"
+edition = "2024"
+
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
+text-document = { path = "../text-document/crates/public_api" }
+text-typeset = { path = "../text-typeset", features = ["text-document"] }
+

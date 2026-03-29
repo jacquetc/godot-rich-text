@@ -1,0 +1,185 @@
+name: Build GDExtension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pin sibling crate versions for reproducible builds.
+  # Update these when upgrading text-document or text-typeset.
+  TEXT_DOCUMENT_REF: main
+  TEXT_TYPESET_REF: main
+
+jobs:
+  # ── Lint & test ──────────────────────────────────────────────
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: jacquetc/text-document
+          path: ../text-document
+          ref: ${{ env.TEXT_DOCUMENT_REF }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jacquetc/text-typeset
+          path: ../text-typeset
+          ref: ${{ env.TEXT_TYPESET_REF }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Format check
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings -A deprecated
+      - name: Test
+        run: cargo test
+
+  # ── Build per platform ───────────────────────────────────────
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            output_name: libgodot_rich_text.so
+            release_name: libgodot_rich_text.linux.release.x86_64.so
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            output_name: godot_rich_text.dll
+            release_name: godot_rich_text.windows.release.x86_64.dll
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            output_name: libgodot_rich_text.dylib
+            release_name: libgodot_rich_text.macos.x86_64.dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            output_name: libgodot_rich_text.dylib
+            release_name: libgodot_rich_text.macos.aarch64.dylib
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: jacquetc/text-document
+          path: ../text-document
+          ref: ${{ env.TEXT_DOCUMENT_REF }}
+      - uses: actions/checkout@v4
+        with:
+          repository: jacquetc/text-typeset
+          path: ../text-typeset
+          ref: ${{ env.TEXT_TYPESET_REF }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.release_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.output_name }}
+
+  # ── macOS universal binary ───────────────────────────────────
+  macos-universal:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Download x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.x86_64.dylib
+          path: x86_64
+
+      - name: Download aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.aarch64.dylib
+          path: aarch64
+
+      - name: Create universal binary
+        run: |
+          lipo -create \
+            x86_64/libgodot_rich_text.dylib \
+            aarch64/libgodot_rich_text.dylib \
+            -output libgodot_rich_text.macos.release.universal.dylib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.release.universal.dylib
+          path: libgodot_rich_text.macos.release.universal.dylib
+
+  # ── Package & release ───────────────────────────────────────
+  release:
+    needs: [build, macos-universal]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create addon structure
+        run: |
+          mkdir -p pkg/addons/godot_rich_text/bin
+          mkdir -p pkg/addons/godot_rich_text/icons
+
+          cp godot/addons/godot_rich_text/godot_rich_text.gdextension pkg/addons/godot_rich_text/
+          cp godot/addons/godot_rich_text/icons/*.svg pkg/addons/godot_rich_text/icons/ 2>/dev/null || true
+          cp LICENSE pkg/addons/godot_rich_text/
+          cp README.md pkg/addons/godot_rich_text/
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.linux.release.x86_64.so
+          path: tmp/linux
+      - run: cp tmp/linux/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.x86_64.so
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: godot_rich_text.windows.release.x86_64.dll
+          path: tmp/windows
+      - run: cp tmp/windows/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.release.x86_64.dll
+
+      - name: Download macOS universal binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.release.universal.dylib
+          path: tmp/macos
+      - run: cp tmp/macos/libgodot_rich_text.macos.release.universal.dylib pkg/addons/godot_rich_text/bin/
+
+      - name: List release contents
+        run: find pkg/ -type f | sort
+
+      - name: Create release archive
+        run: |
+          cd pkg
+          zip -r ../godot-rich-text-${{ github.ref_name }}.zip addons/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: godot-rich-text-${{ github.ref_name }}.zip
+          generate_release_notes: true

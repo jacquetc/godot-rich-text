@@ -1,0 +1,5 @@
+# Asset Library: only include the addons/ folder in downloads
+/** export-ignore
+/godot/addons/ !export-ignore
+/LICENSE !export-ignore
+/README.md !export-ignore

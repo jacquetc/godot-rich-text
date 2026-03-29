@@ -1,0 +1,232 @@
+[gd_scene format=3 uid="uid://dxn4png503emm"]
+
+[ext_resource type="Script" uid="uid://bfxl0qcxa1d2q" path="res://editor_demo.gd" id="1"]
+
+[node name="Root" type="Control" unique_id=1102895935]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=118129360]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 4.0
+offset_right = -8.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Toolbar" type="HBoxContainer" parent="VBox" unique_id=1175311035]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BtnBold" type="Button" parent="VBox/Toolbar" unique_id=392150643]
+layout_mode = 2
+tooltip_text = "Bold (Ctrl+B)"
+toggle_mode = true
+text = "B"
+
+[node name="BtnItalic" type="Button" parent="VBox/Toolbar" unique_id=249903877]
+layout_mode = 2
+tooltip_text = "Italic (Ctrl+I)"
+toggle_mode = true
+text = "I"
+
+[node name="BtnUnderline" type="Button" parent="VBox/Toolbar" unique_id=777699170]
+layout_mode = 2
+tooltip_text = "Underline (Ctrl+U)"
+toggle_mode = true
+text = "U"
+
+[node name="BtnStrike" type="Button" parent="VBox/Toolbar" unique_id=227132642]
+layout_mode = 2
+tooltip_text = "Strikethrough"
+toggle_mode = true
+text = "S"
+
+[node name="Sep1" type="VSeparator" parent="VBox/Toolbar" unique_id=659280634]
+layout_mode = 2
+
+[node name="HeadingPicker" type="OptionButton" parent="VBox/Toolbar" unique_id=301555122]
+layout_mode = 2
+tooltip_text = "Heading level"
+
+[node name="Sep2" type="VSeparator" parent="VBox/Toolbar" unique_id=982595134]
+layout_mode = 2
+
+[node name="BtnListBullet" type="Button" parent="VBox/Toolbar" unique_id=1936464500]
+layout_mode = 2
+tooltip_text = "Bullet list"
+text = "List"
+
+[node name="BtnListNumber" type="Button" parent="VBox/Toolbar" unique_id=223170168]
+layout_mode = 2
+tooltip_text = "Numbered list"
+text = "1."
+
+[node name="Sep3" type="VSeparator" parent="VBox/Toolbar" unique_id=64449378]
+layout_mode = 2
+
+[node name="BtnTableInsert" type="Button" parent="VBox/Toolbar" unique_id=28210521]
+layout_mode = 2
+tooltip_text = "Insert 3x3 table"
+text = "Table"
+
+[node name="Sep4" type="VSeparator" parent="VBox/Toolbar" unique_id=1262786820]
+layout_mode = 2
+
+[node name="BtnUndo" type="Button" parent="VBox/Toolbar" unique_id=1262826891]
+layout_mode = 2
+tooltip_text = "Undo (Ctrl+Z)"
+text = "Undo"
+
+[node name="BtnRedo" type="Button" parent="VBox/Toolbar" unique_id=777421865]
+layout_mode = 2
+tooltip_text = "Redo (Ctrl+Shift+Z)"
+text = "Redo"
+
+[node name="Toolbar2" type="HBoxContainer" parent="VBox" unique_id=1745352017]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="LblTable" type="Label" parent="VBox/Toolbar2" unique_id=354413316]
+layout_mode = 2
+text = "Table:"
+
+[node name="BtnTableRowAbove" type="Button" parent="VBox/Toolbar2" unique_id=1855718333]
+layout_mode = 2
+tooltip_text = "Insert row above"
+text = "+Row Above"
+
+[node name="BtnTableRowBelow" type="Button" parent="VBox/Toolbar2" unique_id=664094707]
+layout_mode = 2
+tooltip_text = "Insert row below"
+text = "+Row Below"
+
+[node name="BtnTableColBefore" type="Button" parent="VBox/Toolbar2" unique_id=1733947435]
+layout_mode = 2
+tooltip_text = "Insert column before"
+text = "+Col Before"
+
+[node name="BtnTableColAfter" type="Button" parent="VBox/Toolbar2" unique_id=429238597]
+layout_mode = 2
+tooltip_text = "Insert column after"
+text = "+Col After"
+
+[node name="Sep5" type="VSeparator" parent="VBox/Toolbar2" unique_id=1090306862]
+layout_mode = 2
+
+[node name="BtnTableDelRow" type="Button" parent="VBox/Toolbar2" unique_id=2117056851]
+layout_mode = 2
+tooltip_text = "Delete current row"
+text = "-Row"
+
+[node name="BtnTableDelCol" type="Button" parent="VBox/Toolbar2" unique_id=1420477651]
+layout_mode = 2
+tooltip_text = "Delete current column"
+text = "-Col"
+
+[node name="BtnTableRemove" type="Button" parent="VBox/Toolbar2" unique_id=623572659]
+layout_mode = 2
+tooltip_text = "Remove entire table"
+text = "Remove Table"
+
+[node name="HSplit" type="HSplitContainer" parent="VBox" unique_id=414080705]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EditorBg" type="ColorRect" parent="VBox/HSplit" unique_id=1725317624]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Editor" type="RichTextEdit" parent="VBox/HSplit/EditorBg" unique_id=101067923]
+markdown_text = "# Rich text editor
+
+## Sub title
+
+First paragraph with **bold words** and *italic words* and ~~strikethrough~~ and <u>underlined</u> and `inline code` wrapping at narrow viewport.
+
+- Bullet item one short
+- Bullet item two with **bold** and *italic* text to wrap around the edge
+  - Nested bullet under item two
+  - Another nested bullet with enough words to wrap
+    - Third level nesting here
+
+1. Numbered first item
+2. Numbered second with longer text that also wraps at narrow width
+   1. Nested numbered item under two
+   2. Another nested numbered item
+
+> Blockquote paragraph with *italic* and **bold** wrapping text inside the frame.
+>
+> > Nested blockquote deeper inside with ~~strikethrough~~ and more text to wrap around.
+
+```
+fn code_block_example() {
+    let x = 42;
+    println!(\"the answer is {}\", x);
+}
+```
+
+| Column A | Column B |
+|----------|----------|
+| Cell one | Cell two with **bold** and enough text to wrap inside the cell |
+| Cell three | Cell four with `code` and *italic* |
+
+Final paragraph after all elements with <u>underlined words</u> and wrapping text as well here.
+*Powered by text-document & text-typeset.*"
+wrap_mode = 1
+zoom = 1.4500000000000002
+caret_color = Color(0, 0, 0, 1)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ViewerBg" type="ColorRect" parent="VBox/HSplit" unique_id=764806785]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Viewer" type="RichTextView" parent="VBox/HSplit/ViewerBg" unique_id=1274428550]
+markdown_text = "# RichTextView
+
+Read-only display of rich text content.
+
+## Supported elements
+
+1. **Bold** and *italic* text
+2. Headings (H1-H6)
+3. Ordered and unordered lists
+4. Block quotes
+5. Horizontal rules
+
+> quote
+
+```
+Block code
+```
+
+`inline code quote`
+
+---
+
+Click on [links](#) to trigger the `link_clicked` signal."
+wrap_mode = 1
+selectable = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ContextMenu" type="PopupMenu" parent="." unique_id=96608944]
