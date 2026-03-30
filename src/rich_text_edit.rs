@@ -9,8 +9,8 @@ use godot::obj::{Base, Gd, WithBaseField};
 use godot::prelude::*;
 
 use text_document::{
-    DocumentEvent, FlowElement, MoveMode, MoveOperation, SelectionKind, SelectionType, TextCursor,
-    TextDocument,
+    DocumentEvent, DocumentFragment, FlowElement, MoveMode, MoveOperation, SelectionKind,
+    SelectionType, TextCursor, TextDocument,
 };
 use text_typeset::{CursorDisplay, HitRegion, Typesetter};
 
@@ -101,8 +101,8 @@ pub struct RichTextEdit {
     h_scrollbar: Option<Gd<HScrollBar>>,
     /// Remembered X position for vertical cursor movement (sticky column).
     preferred_x: Option<f32>,
-    /// Internal rich clipboard (HTML) for preserving formatting within the app.
-    rich_clipboard_html: Option<String>,
+    /// Internal rich clipboard (fragment) for preserving formatting within the app.
+    rich_clipboard_fragment: Option<DocumentFragment>,
     /// Plain text corresponding to the rich clipboard, to detect external clipboard changes.
     rich_clipboard_plain: Option<String>,
     /// Click counter for triple-click detection.
@@ -168,7 +168,7 @@ impl IControl for RichTextEdit {
             v_scrollbar: None,
             h_scrollbar: None,
             preferred_x: None,
-            rich_clipboard_html: None,
+            rich_clipboard_fragment: None,
             rich_clipboard_plain: None,
             click_count: 0,
             last_click_time: 0.0,
@@ -2016,8 +2016,12 @@ impl RichTextEdit {
             };
             scrollbar.set_position(Vector2::new(size.x - sb_width, 0.0));
             scrollbar.set_size(Vector2::new(sb_width, h));
+            // Block signals to prevent set_max/set_page from triggering
+            // value_changed while &mut self is already borrowed.
+            scrollbar.set_block_signals(true);
             scrollbar.set_max(content_height);
             scrollbar.set_page(h as f64 / zoom);
+            scrollbar.set_block_signals(false);
             scrollbar.set_value_no_signal(self.scroll_offset as f64);
             scrollbar.set_visible(v_visible);
         }
@@ -2032,8 +2036,10 @@ impl RichTextEdit {
             };
             scrollbar.set_position(Vector2::new(0.0, size.y - sb_height));
             scrollbar.set_size(Vector2::new(w, sb_height));
+            scrollbar.set_block_signals(true);
             scrollbar.set_max(max_content_width);
             scrollbar.set_page(w as f64 / zoom);
+            scrollbar.set_block_signals(false);
             scrollbar.set_value_no_signal(self.h_scroll_offset as f64);
             scrollbar.set_visible(h_visible);
         }
@@ -2045,17 +2051,15 @@ impl RichTextEdit {
             return;
         }
 
-        // Store rich HTML for internal paste
         let fragment = cursor.selection();
         let plain = fragment.to_plain_text().to_string();
         if plain.is_empty() {
             return;
         }
-        let html = fragment.to_html();
 
-        // Set system clipboard with plain text; keep selection
+        // Set system clipboard with plain text; store fragment for internal paste
         DisplayServer::singleton().clipboard_set(&GString::from(plain.as_str()));
-        self.rich_clipboard_html = Some(html);
+        self.rich_clipboard_fragment = Some(fragment);
         self.rich_clipboard_plain = Some(plain);
     }
 
@@ -2063,12 +2067,12 @@ impl RichTextEdit {
         let Some(cursor) = &self.cursor else { return };
         let system_text = DisplayServer::singleton().clipboard_get().to_string();
 
-        // If system clipboard matches what we copied, paste rich HTML
-        if let (Some(html), Some(our_plain)) =
-            (&self.rich_clipboard_html, &self.rich_clipboard_plain)
+        // If system clipboard matches what we copied, paste the fragment directly
+        if let (Some(fragment), Some(our_plain)) =
+            (&self.rich_clipboard_fragment, &self.rich_clipboard_plain)
             && system_text == *our_plain
         {
-            let _ = cursor.insert_html(html);
+            let _ = cursor.insert_fragment(fragment);
             cursor.clear_selection();
             self.update_cursor_display();
             return;
