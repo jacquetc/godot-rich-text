@@ -188,7 +188,7 @@ impl IControl for RichTextEdit {
     fn ready(&mut self) {
         self.base_mut().set_focus_mode(FocusMode::ALL);
         self.base_mut().set_clip_contents(true);
-        self.base_mut().set_texture_filter(TextureFilter::LINEAR);
+        self.base_mut().set_texture_filter(TextureFilter::NEAREST);
 
         let doc = TextDocument::new();
         let mut ts = Typesetter::new();
