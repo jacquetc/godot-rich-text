@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "godot-rich-text"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "godot",
  "text-document",
