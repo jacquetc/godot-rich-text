@@ -12,7 +12,9 @@ use text_document::{
     DocumentEvent, DocumentFragment, FlowElement, MoveMode, MoveOperation, SelectionKind,
     SelectionType, TextCursor, TextDocument,
 };
-use text_typeset::{CursorDisplay, HitRegion, Typesetter};
+use text_typeset::{CursorDisplay, HitRegion};
+
+use crate::typesetter::Typesetter;
 
 use crate::bridge::{self, ImageCache};
 use crate::fonts::{self, FontIds, FontSlots};
@@ -377,7 +379,19 @@ impl IControl for RichTextEdit {
                 if let Some(snap) = doc.snapshot_block_at_position(last_pos) {
                     let block_id = snap.block_id;
                     let params = text_typeset::bridge::convert_block(&snap);
-                    ts.relayout_block(&params);
+                    // This branch runs only when `needs_full_layout`
+                    // is false, which itself is only reachable after
+                    // a prior `layout_full` in this same frame path,
+                    // so the flow is guaranteed to have a baseline
+                    // layout at the service's current scale factor.
+                    // A `RelayoutError` here would mean the
+                    // invariant check in `DocumentFlow` and the
+                    // `needs_full_layout` bookkeeping disagree,
+                    // which is a structural bug worth panicking on.
+                    ts.relayout_block(&params).expect(
+                        "relayout_block invariant violated: prior layout_full \
+                         should guarantee has_layout + no scale dirt",
+                    );
                     self.last_relayout_block_id = Some(block_id);
                 }
             }

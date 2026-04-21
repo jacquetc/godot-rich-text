@@ -11,7 +11,9 @@ use godot::prelude::*;
 use text_document::{
     DocumentEvent, MoveMode, MoveOperation, SelectionType, TextCursor, TextDocument,
 };
-use text_typeset::{CursorDisplay, HitRegion, Typesetter};
+use text_typeset::{CursorDisplay, HitRegion};
+
+use crate::typesetter::Typesetter;
 
 use crate::bridge::{self, ImageCache};
 use crate::fonts::{self, FontSlots};

@@ -1,7 +1,9 @@
 use godot::classes::FontFile;
 use godot::obj::Gd;
 use godot::prelude::*;
-use text_typeset::{FontFaceId, Typesetter};
+use text_typeset::FontFaceId;
+
+use crate::typesetter::Typesetter;
 
 // Embedded default fonts (NotoSans, SIL Open Font License)
 static EMBEDDED_REGULAR: &[u8] = include_bytes!("NotoSans-Regular.ttf");

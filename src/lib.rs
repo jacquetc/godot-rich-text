@@ -5,6 +5,7 @@ mod fonts;
 mod input;
 mod rich_text_edit;
 mod rich_text_view;
+mod typesetter;
 
 struct GodotRichText;
 
