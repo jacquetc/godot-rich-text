@@ -151,10 +151,7 @@ impl Typesetter {
         self.flow.add_table(&self.service, params);
     }
 
-    pub fn relayout_block(
-        &mut self,
-        params: &BlockLayoutParams,
-    ) -> Result<(), RelayoutError> {
+    pub fn relayout_block(&mut self, params: &BlockLayoutParams) -> Result<(), RelayoutError> {
         self.flow.relayout_block(&self.service, params)
     }
 
@@ -228,8 +225,7 @@ impl Typesetter {
         char_start: usize,
         char_end: usize,
     ) -> Vec<CharacterGeometry> {
-        self.flow
-            .character_geometry(block_id, char_start, char_end)
+        self.flow.character_geometry(block_id, char_start, char_end)
     }
 
     pub fn caret_rect(&self, position: usize) -> [f32; 4] {
