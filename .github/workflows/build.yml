@@ -55,18 +55,22 @@ jobs:
             target: x86_64-unknown-linux-gnu
             output_name: libgodot_rich_text.so
             release_name: libgodot_rich_text.linux.release.x86_64.so
+            debug_name: libgodot_rich_text.linux.debug.x86_64.so
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             output_name: godot_rich_text.dll
             release_name: godot_rich_text.windows.release.x86_64.dll
+            debug_name: godot_rich_text.windows.debug.x86_64.dll
           - os: macos-latest
             target: x86_64-apple-darwin
             output_name: libgodot_rich_text.dylib
             release_name: libgodot_rich_text.macos.x86_64.dylib
+            debug_name: libgodot_rich_text.macos.debug.x86_64.dylib
           - os: macos-latest
             target: aarch64-apple-darwin
             output_name: libgodot_rich_text.dylib
             release_name: libgodot_rich_text.macos.aarch64.dylib
+            debug_name: libgodot_rich_text.macos.debug.aarch64.dylib
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -87,11 +91,20 @@ jobs:
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload artifact
+      - name: Build debug
+        run: cargo build --target ${{ matrix.target }}
+
+      - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.release_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.output_name }}
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.debug_name }}
+          path: target/${{ matrix.target }}/debug/${{ matrix.output_name }}
 
   # ── macOS universal binary ───────────────────────────────────
   macos-universal:
@@ -99,29 +112,53 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 10
     steps:
-      - name: Download x86_64
+      - name: Download release x86_64
         uses: actions/download-artifact@v4
         with:
           name: libgodot_rich_text.macos.x86_64.dylib
-          path: x86_64
+          path: release/x86_64
 
-      - name: Download aarch64
+      - name: Download release aarch64
         uses: actions/download-artifact@v4
         with:
           name: libgodot_rich_text.macos.aarch64.dylib
-          path: aarch64
+          path: release/aarch64
 
-      - name: Create universal binary
+      - name: Create release universal binary
         run: |
           lipo -create \
-            x86_64/libgodot_rich_text.dylib \
-            aarch64/libgodot_rich_text.dylib \
+            release/x86_64/libgodot_rich_text.dylib \
+            release/aarch64/libgodot_rich_text.dylib \
             -output libgodot_rich_text.macos.release.universal.dylib
 
       - uses: actions/upload-artifact@v4
         with:
           name: libgodot_rich_text.macos.release.universal.dylib
           path: libgodot_rich_text.macos.release.universal.dylib
+
+      - name: Download debug x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.debug.x86_64.dylib
+          path: debug/x86_64
+
+      - name: Download debug aarch64
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.debug.aarch64.dylib
+          path: debug/aarch64
+
+      - name: Create debug universal binary
+        run: |
+          lipo -create \
+            debug/x86_64/libgodot_rich_text.dylib \
+            debug/aarch64/libgodot_rich_text.dylib \
+            -output libgodot_rich_text.macos.debug.universal.dylib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.debug.universal.dylib
+          path: libgodot_rich_text.macos.debug.universal.dylib
 
   # ── Package & release ───────────────────────────────────────
   release:
@@ -165,26 +202,47 @@ jobs:
           cp godot/addons/godot_rich_text/LICENSE pkg/addons/godot_rich_text/
           cp godot/addons/godot_rich_text/README.md pkg/addons/godot_rich_text/
 
-      - name: Download Linux binary
+      - name: Download Linux release binary
         uses: actions/download-artifact@v4
         with:
           name: libgodot_rich_text.linux.release.x86_64.so
           path: tmp/linux
       - run: cp tmp/linux/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.x86_64.so
 
-      - name: Download Windows binary
+      - name: Download Linux debug binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.linux.debug.x86_64.so
+          path: tmp/linux-debug
+      - run: cp tmp/linux-debug/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.x86_64.so
+
+      - name: Download Windows release binary
         uses: actions/download-artifact@v4
         with:
           name: godot_rich_text.windows.release.x86_64.dll
           path: tmp/windows
       - run: cp tmp/windows/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.release.x86_64.dll
 
-      - name: Download macOS universal binary
+      - name: Download Windows debug binary
+        uses: actions/download-artifact@v4
+        with:
+          name: godot_rich_text.windows.debug.x86_64.dll
+          path: tmp/windows-debug
+      - run: cp tmp/windows-debug/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.debug.x86_64.dll
+
+      - name: Download macOS release universal binary
         uses: actions/download-artifact@v4
         with:
           name: libgodot_rich_text.macos.release.universal.dylib
           path: tmp/macos
       - run: cp tmp/macos/libgodot_rich_text.macos.release.universal.dylib pkg/addons/godot_rich_text/bin/
+
+      - name: Download macOS debug universal binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.macos.debug.universal.dylib
+          path: tmp/macos-debug
+      - run: cp tmp/macos-debug/libgodot_rich_text.macos.debug.universal.dylib pkg/addons/godot_rich_text/bin/
 
       - name: List release contents
         run: ls -lhR pkg/
