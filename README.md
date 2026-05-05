@@ -36,11 +36,59 @@ Requirements:
 - Rust (2024 edition)
 - Godot 4.3+
 
+Note: if you are building from source and hit dependency resolution issues, you may need to remove the `path` entries for `text-document` and `text-typeset` in `Cargo.toml`. They are here for development purpose and are stripped when releasing.
+
 ```bash
 cargo build
 ```
 
 The compiled library will be placed in `target/debug/` (or `target/release/` with `--release`). Copy it to your Godot project's addon directory as referenced by the `.gdextension` file.
+
+On Windows (PowerShell), for a debug build you can either copy the DLL:
+
+```powershell
+Copy-Item .\target\debug\godot_rich_text.dll .\godot\addons\godot_rich_text\bin\godot_rich_text.windows.debug.x86_64.dll -Force
+```
+
+Or create a hard link (so the addon DLL always points to the built artifact):
+
+```powershell
+New-Item -ItemType HardLink -Path .\godot\addons\godot_rich_text\bin\godot_rich_text.windows.debug.x86_64.dll -Target .\target\debug\godot_rich_text.dll
+```
+
+For a release build, use the corresponding release artifact and filename:
+
+```powershell
+Copy-Item .\target\release\godot_rich_text.dll .\godot\addons\godot_rich_text\bin\godot_rich_text.windows.release.x86_64.dll -Force
+```
+
+```powershell
+New-Item -ItemType HardLink -Path .\godot\addons\godot_rich_text\bin\godot_rich_text.windows.release.x86_64.dll -Target .\target\release\godot_rich_text.dll
+```
+
+On Linux (bash), the equivalent debug/release copy commands are:
+
+```bash
+cp ./target/debug/libgodot_rich_text.so ./godot/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.x86_64.so
+cp ./target/release/libgodot_rich_text.so ./godot/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.x86_64.so
+```
+
+Or use symbolic links:
+
+```bash
+ln -sf ./target/debug/libgodot_rich_text.so ./godot/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.x86_64.so
+ln -sf ./target/release/libgodot_rich_text.so ./godot/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.x86_64.so
+```
+
+### From release builds
+
+Download the pre-built library for your platform from the releases page and place it in `./godot/addons/godot_rich_text/bin/`:
+
+- **Windows**: `godot_rich_text.windows.release.x86_64.dll`
+- **Linux**: `libgodot_rich_text.linux.release.x86_64.so`
+- **macOS**: `libgodot_rich_text.macos.release.universal.dylib`
+
+The expected filenames match the paths declared in the `.gdextension` file.
 
 ### Addon setup
 
