@@ -85,7 +85,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -123,13 +123,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Download release x86_64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.macos.x86_64.dylib
           path: release/x86_64
 
       - name: Download release aarch64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.macos.aarch64.dylib
           path: release/aarch64
@@ -141,19 +141,19 @@ jobs:
             release/aarch64/libgodot_rich_text.dylib \
             -output libgodot_rich_text.macos.release.universal.dylib
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: libgodot_rich_text.macos.release.universal.dylib
           path: libgodot_rich_text.macos.release.universal.dylib
 
       - name: Download debug x86_64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.macos.debug.x86_64.dylib
           path: debug/x86_64
 
       - name: Download debug aarch64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.macos.debug.aarch64.dylib
           path: debug/aarch64
@@ -165,7 +165,7 @@ jobs:
             debug/aarch64/libgodot_rich_text.dylib \
             -output libgodot_rich_text.macos.debug.universal.dylib
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: libgodot_rich_text.macos.debug.universal.dylib
           path: libgodot_rich_text.macos.debug.universal.dylib
@@ -179,7 +179,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -213,70 +213,70 @@ jobs:
           cp godot/addons/godot_rich_text/README.md pkg/addons/godot_rich_text/
 
       - name: Download Linux release binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.linux.release.x86_64.so
           path: tmp/linux
       - run: cp tmp/linux/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.x86_64.so
 
       - name: Download Linux debug binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.linux.debug.x86_64.so
           path: tmp/linux-debug
       - run: cp tmp/linux-debug/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.x86_64.so
 
       - name: Download Linux ARM64 release binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.linux.release.arm64.so
           path: tmp/linux-arm64
       - run: cp tmp/linux-arm64/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.arm64.so
 
       - name: Download Linux ARM64 debug binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.linux.debug.arm64.so
           path: tmp/linux-arm64-debug
       - run: cp tmp/linux-arm64-debug/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.arm64.so
 
       - name: Download Windows release binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: godot_rich_text.windows.release.x86_64.dll
           path: tmp/windows
       - run: cp tmp/windows/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.release.x86_64.dll
 
       - name: Download Windows debug binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: godot_rich_text.windows.debug.x86_64.dll
           path: tmp/windows-debug
       - run: cp tmp/windows-debug/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.debug.x86_64.dll
 
       - name: Download Windows ARM64 release binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: godot_rich_text.windows.release.arm64.dll
           path: tmp/windows-arm64
       - run: cp tmp/windows-arm64/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.release.arm64.dll
 
       - name: Download Windows ARM64 debug binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: godot_rich_text.windows.debug.arm64.dll
           path: tmp/windows-arm64-debug
       - run: cp tmp/windows-arm64-debug/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.debug.arm64.dll
 
       - name: Download macOS release universal binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.macos.release.universal.dylib
           path: tmp/macos
       - run: cp tmp/macos/libgodot_rich_text.macos.release.universal.dylib pkg/addons/godot_rich_text/bin/
 
       - name: Download macOS debug universal binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: libgodot_rich_text.macos.debug.universal.dylib
           path: tmp/macos-debug
