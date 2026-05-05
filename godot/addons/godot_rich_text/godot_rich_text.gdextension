@@ -6,8 +6,12 @@ reloadable = true
 [libraries]
 linux.debug.x86_64 = "res://addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.x86_64.so"
 linux.release.x86_64 = "res://addons/godot_rich_text/bin/libgodot_rich_text.linux.release.x86_64.so"
+linux.debug.arm64 = "res://addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.arm64.so"
+linux.release.arm64 = "res://addons/godot_rich_text/bin/libgodot_rich_text.linux.release.arm64.so"
 windows.debug.x86_64 = "res://addons/godot_rich_text/bin/godot_rich_text.windows.debug.x86_64.dll"
 windows.release.x86_64 = "res://addons/godot_rich_text/bin/godot_rich_text.windows.release.x86_64.dll"
+windows.debug.arm64 = "res://addons/godot_rich_text/bin/godot_rich_text.windows.debug.arm64.dll"
+windows.release.arm64 = "res://addons/godot_rich_text/bin/godot_rich_text.windows.release.arm64.dll"
 macos.debug = "res://addons/godot_rich_text/bin/libgodot_rich_text.macos.debug.universal.dylib"
 macos.release = "res://addons/godot_rich_text/bin/libgodot_rich_text.macos.release.universal.dylib"
 

@@ -61,6 +61,16 @@ jobs:
             output_name: godot_rich_text.dll
             release_name: godot_rich_text.windows.release.x86_64.dll
             debug_name: godot_rich_text.windows.debug.x86_64.dll
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            output_name: libgodot_rich_text.so
+            release_name: libgodot_rich_text.linux.release.arm64.so
+            debug_name: libgodot_rich_text.linux.debug.arm64.so
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            output_name: godot_rich_text.dll
+            release_name: godot_rich_text.windows.release.arm64.dll
+            debug_name: godot_rich_text.windows.debug.arm64.dll
           - os: macos-latest
             target: x86_64-apple-darwin
             output_name: libgodot_rich_text.dylib
@@ -216,6 +226,20 @@ jobs:
           path: tmp/linux-debug
       - run: cp tmp/linux-debug/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.x86_64.so
 
+      - name: Download Linux ARM64 release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.linux.release.arm64.so
+          path: tmp/linux-arm64
+      - run: cp tmp/linux-arm64/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.release.arm64.so
+
+      - name: Download Linux ARM64 debug binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libgodot_rich_text.linux.debug.arm64.so
+          path: tmp/linux-arm64-debug
+      - run: cp tmp/linux-arm64-debug/libgodot_rich_text.so pkg/addons/godot_rich_text/bin/libgodot_rich_text.linux.debug.arm64.so
+
       - name: Download Windows release binary
         uses: actions/download-artifact@v4
         with:
@@ -229,6 +253,20 @@ jobs:
           name: godot_rich_text.windows.debug.x86_64.dll
           path: tmp/windows-debug
       - run: cp tmp/windows-debug/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.debug.x86_64.dll
+
+      - name: Download Windows ARM64 release binary
+        uses: actions/download-artifact@v4
+        with:
+          name: godot_rich_text.windows.release.arm64.dll
+          path: tmp/windows-arm64
+      - run: cp tmp/windows-arm64/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.release.arm64.dll
+
+      - name: Download Windows ARM64 debug binary
+        uses: actions/download-artifact@v4
+        with:
+          name: godot_rich_text.windows.debug.arm64.dll
+          path: tmp/windows-arm64-debug
+      - run: cp tmp/windows-arm64-debug/godot_rich_text.dll pkg/addons/godot_rich_text/bin/godot_rich_text.windows.debug.arm64.dll
 
       - name: Download macOS release universal binary
         uses: actions/download-artifact@v4
