@@ -114,6 +114,7 @@ pub fn draw_frame(
             | DecorationKind::Background
             | DecorationKind::BlockBackground
             | DecorationKind::TableCellBackground
+            | DecorationKind::TextBackground
             | DecorationKind::TableBorder => {
                 let rect = to_rect2_h(deco.rect, h_offset);
                 let color = to_color(deco.color);

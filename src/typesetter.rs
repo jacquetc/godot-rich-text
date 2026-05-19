@@ -229,7 +229,8 @@ impl Typesetter {
     }
 
     pub fn caret_rect(&self, position: usize) -> [f32; 4] {
-        self.flow.caret_rect(position)
+        self.flow
+            .caret_rect(position, text_typeset::CursorAffinity::Downstream)
     }
 
     // ── Cursor & colors ───────────────────────────────────────

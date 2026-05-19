@@ -11,7 +11,7 @@ use godot::prelude::*;
 use text_document::{
     DocumentEvent, MoveMode, MoveOperation, SelectionType, TextCursor, TextDocument,
 };
-use text_typeset::{CursorDisplay, HitRegion};
+use text_typeset::{CursorAffinity, CursorDisplay, HitRegion};
 
 use crate::typesetter::Typesetter;
 
@@ -732,6 +732,7 @@ impl RichTextView {
             ts.set_cursor(&CursorDisplay {
                 position: cursor.position(),
                 anchor: cursor.anchor(),
+                affinity: CursorAffinity::Downstream,
                 visible: false, // Never show the caret in view mode
                 selected_cells: Vec::new(),
             });

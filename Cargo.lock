@@ -994,6 +994,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
+name = "ropey"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93411e420bcd1a75ddd1dc3caf18c23155eda2c090631a85af21ba19e97093b5"
+dependencies = [
+ "smallvec",
+ "str_indices",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1205,6 +1215,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "str_indices"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d08889ec5408683408db66ad89e0e1f93dff55c73a4ccc71c427d5b277ee47e6"
+
+[[package]]
 name = "string_cache"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1262,20 +1278,21 @@ dependencies = [
 
 [[package]]
 name = "text-document"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "base64",
  "log",
  "parking_lot",
  "serde_json",
+ "text-document-common",
  "text-document-frontend",
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "text-document-common"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1284,6 +1301,7 @@ dependencies = [
  "im",
  "log",
  "pulldown-cmark",
+ "ropey",
  "scraper",
  "serde",
  "serde_json",
@@ -1293,7 +1311,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-direct-access"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1306,7 +1324,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-editing"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1319,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-formatting"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1332,7 +1350,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-frontend"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1349,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-inspection"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1362,7 +1380,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-io"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1377,7 +1395,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-macros"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1387,7 +1405,7 @@ dependencies = [
 
 [[package]]
 name = "text-document-search"
-version = "1.4.2"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1402,7 +1420,7 @@ dependencies = [
 
 [[package]]
 name = "text-typeset"
-version = "1.3.1"
+version = "1.4.0"
 dependencies = [
  "anyhow",
  "etagere",

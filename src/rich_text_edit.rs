@@ -12,7 +12,7 @@ use text_document::{
     DocumentEvent, DocumentFragment, FlowElement, MoveMode, MoveOperation, SelectionKind,
     SelectionType, TextCursor, TextDocument,
 };
-use text_typeset::{CursorDisplay, HitRegion};
+use text_typeset::{CursorAffinity, CursorDisplay, HitRegion};
 
 use crate::typesetter::Typesetter;
 
@@ -261,6 +261,7 @@ impl IControl for RichTextEdit {
         ts.set_cursor(&CursorDisplay {
             position: cursor.position(),
             anchor: cursor.anchor(),
+            affinity: CursorAffinity::Downstream,
             visible: true,
             selected_cells: Vec::new(),
         });
@@ -1718,6 +1719,7 @@ impl RichTextEdit {
             ts.set_cursor(&CursorDisplay {
                 position: cursor.position(),
                 anchor: cursor.anchor(),
+                affinity: CursorAffinity::Downstream,
                 visible,
                 selected_cells,
             });
