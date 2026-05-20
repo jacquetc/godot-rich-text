@@ -32,6 +32,8 @@ pub enum InputAction {
     SelectEnd,
     SelectDocStart,
     SelectDocEnd,
+    SelectPageUp,
+    SelectPageDown,
     SelectAll,
     // Editing
     Backspace,
@@ -46,6 +48,7 @@ pub enum InputAction {
     Cut,
     Copy,
     Paste,
+    PasteUnformatted,
     // Undo/redo
     Undo,
     Redo,
@@ -54,6 +57,7 @@ pub enum InputAction {
     ShiftClick { position: Vector2 },
     DragSelect { position: Vector2 },
     DoubleClick { position: Vector2 },
+    EndDrag,
     // Scroll
     ScrollUp,
     ScrollDown,
@@ -72,10 +76,15 @@ pub fn translate_input(event: &Gd<InputEvent>) -> InputAction {
         return translate_key(&key_event);
     }
 
-    if let Ok(mb_event) = event.clone().try_cast::<InputEventMouseButton>()
-        && mb_event.is_pressed()
-    {
-        return translate_mouse_button(&mb_event);
+    if let Ok(mb_event) = event.clone().try_cast::<InputEventMouseButton>() {
+        if mb_event.is_pressed() {
+            return translate_mouse_button(&mb_event);
+        }
+        // Released — only the primary button matters: it ends a drag.
+        if mb_event.get_button_index() == MouseButton::LEFT {
+            return InputAction::EndDrag;
+        }
+        return InputAction::None;
     }
 
     if let Ok(motion_event) = event.clone().try_cast::<InputEventMouseMotion>() {
@@ -138,6 +147,9 @@ fn translate_key(event: &Gd<InputEventKey>) -> InputAction {
         if keycode == Key::END {
             return InputAction::SelectDocEnd;
         }
+        if keycode == Key::V {
+            return InputAction::PasteUnformatted;
+        }
     }
 
     // Navigation with Ctrl (word/doc movement)
@@ -185,6 +197,12 @@ fn translate_key(event: &Gd<InputEventKey>) -> InputAction {
         }
         if keycode == Key::END {
             return InputAction::SelectEnd;
+        }
+        if keycode == Key::PAGEUP {
+            return InputAction::SelectPageUp;
+        }
+        if keycode == Key::PAGEDOWN {
+            return InputAction::SelectPageDown;
         }
     }
 

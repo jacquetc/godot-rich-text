@@ -129,8 +129,44 @@ pub struct RichTextEdit {
     last_relayout_block_id: Option<usize>,
     /// Buffered character input, flushed as one insert at start of process().
     pending_chars: String,
-    /// Ctrl+A escalation level: 0=none, 1=cell content, 2=cell, 3=table, then document.
+    /// Ctrl+A escalation level: 0=none, 1=block, 2=cell, 3=table, then document.
     select_all_level: u8,
+    /// Cached cell info captured at Ctrl+A level 1 so subsequent levels are not
+    /// thrown off by a selection that straddles a cell boundary (which can make
+    /// `current_table_cell()` return None at level 2).
+    select_all_anchor_cell: Option<SelectAllAnchorCell>,
+    /// Which side of a soft-wrap boundary the caret renders at. Mouse clicks
+    /// set this from `HitTestResult::affinity`; vertical/Home/End navigation
+    /// re-derives it via hit-test; horizontal moves and edits reset to
+    /// `Downstream`.
+    cursor_affinity: CursorAffinity,
+    /// Current IME preedit (composing) text — what we have tentatively inserted
+    /// at the caret while the user composes via an IME. Empty between
+    /// compositions.
+    ime_preedit_text: String,
+    /// Document position where the active IME preedit was inserted. `None`
+    /// when no composition is active. Stored so we can remove the tentative
+    /// text precisely even if a redraw or layout shifts visible positions.
+    ime_preedit_anchor: Option<usize>,
+    /// Drag-select autoscroll velocity in document-space pixels per second.
+    /// Non-zero while the user drags near a vertical viewport edge; cleared
+    /// when the drag ends. Applied per frame in `process()` independently of
+    /// mouse-move events so the selection continues to advance even if the
+    /// mouse is stationary against an edge.
+    drag_autoscroll_v_per_s: f32,
+    /// Last drag-select mouse position. Re-hit-tested each frame while
+    /// `drag_autoscroll_v_per_s` is non-zero so the cursor end of the
+    /// selection follows the scroll.
+    drag_last_mouse_pos: Vector2,
+}
+
+#[derive(Clone, Copy)]
+struct SelectAllAnchorCell {
+    table_id: usize,
+    row: usize,
+    column: usize,
+    table_rows: usize,
+    table_columns: usize,
 }
 
 #[godot_api]
@@ -184,6 +220,12 @@ impl IControl for RichTextEdit {
             last_relayout_block_id: None,
             pending_chars: String::new(),
             select_all_level: 0,
+            select_all_anchor_cell: None,
+            cursor_affinity: CursorAffinity::Downstream,
+            ime_preedit_text: String::new(),
+            ime_preedit_anchor: None,
+            drag_autoscroll_v_per_s: 0.0,
+            drag_last_mouse_pos: Vector2::ZERO,
         }
     }
 
@@ -261,7 +303,7 @@ impl IControl for RichTextEdit {
         ts.set_cursor(&CursorDisplay {
             position: cursor.position(),
             anchor: cursor.anchor(),
-            affinity: CursorAffinity::Downstream,
+            affinity: self.cursor_affinity,
             visible: true,
             selected_cells: Vec::new(),
         });
@@ -297,6 +339,16 @@ impl IControl for RichTextEdit {
 
     fn process(&mut self, delta: f64) {
         self.flush_pending_chars();
+
+        // Drag-select autoscroll: apply velocity each frame so a mouse held
+        // against a viewport edge keeps scrolling and extending the selection
+        // even when no mouse-move events arrive.
+        if self.drag_autoscroll_v_per_s != 0.0 {
+            let scroll_delta = self.drag_autoscroll_v_per_s * delta as f32;
+            self.scroll_by(scroll_delta);
+            let last_pos = self.drag_last_mouse_pos;
+            self.apply_drag_selection_at(last_pos);
+        }
 
         let mut emit_document_loaded = false;
         let mut had_content_change = false;
@@ -457,6 +509,23 @@ impl IControl for RichTextEdit {
         }
     }
 
+    /// Three-path render dispatcher. Picks the cheapest text-typeset render
+    /// call that still produces a correct frame for what changed:
+    ///
+    /// - `content_dirty` + a specific `last_relayout_block_id` →
+    ///   `render_block_only` (re-shape one block; faster than full render for
+    ///   single-block keystrokes).
+    /// - `content_dirty` without an incremental block id → `render()` (full
+    ///   re-shape for structural changes: paste, undo, layout reflow).
+    /// - `!content_dirty` (just a caret blink or selection move) →
+    ///   `render_cursor_only` (mutates cursor/selection decorations in place;
+    ///   keeps existing glyphs intact). Auto-falls-back to `render` inside
+    ///   text-typeset if scroll/zoom changed since the last full render.
+    ///
+    /// Note: Godot's `_draw()` is immediate-mode — the canvas is cleared each
+    /// call and every visible glyph has to be re-issued via `draw_*` even on
+    /// cursor-only paths. The optimisation we get here is on the CPU side
+    /// (skipping glyph re-shaping); GPU blit cost stays the same.
     fn draw(&mut self) {
         let mut ts = self.typesetter.take();
         let mut atlas_tex = self.atlas_texture.take();
@@ -472,14 +541,11 @@ impl IControl for RichTextEdit {
         if let (Some(ts), Some(atlas_tex)) = (&mut ts, &mut atlas_tex) {
             let frame = if content_dirty {
                 if let Some(block_id) = incremental_block {
-                    // Incremental render: only re-render the changed block
                     ts.render_block_only(block_id)
                 } else {
-                    // Full render: structural change, rebuild everything
                     ts.render()
                 }
             } else {
-                // Cursor-only: just update cursor/selection decorations
                 ts.render_cursor_only()
             };
             if content_dirty {
@@ -513,7 +579,10 @@ impl IControl for RichTextEdit {
 
         let action = input::translate_input(&event);
 
-        // Clear sticky X for any non-vertical action (but not for None/scroll)
+        // Clear sticky X for any non-vertical action (but not for None/scroll).
+        // The same condition resets cursor affinity to Downstream — vertical-nav
+        // and mouse handlers re-derive affinity from `HitTestResult::affinity`
+        // and overwrite it after the move.
         if !matches!(
             action,
             InputAction::None
@@ -523,17 +592,25 @@ impl IControl for RichTextEdit {
                 | InputAction::SelectDown
                 | InputAction::PageUp
                 | InputAction::PageDown
+                | InputAction::SelectPageUp
+                | InputAction::SelectPageDown
+                | InputAction::Click { .. }
+                | InputAction::ShiftClick { .. }
+                | InputAction::DragSelect { .. }
+                | InputAction::DoubleClick { .. }
                 | InputAction::ScrollUp
                 | InputAction::ScrollDown
                 | InputAction::ScrollLeft
                 | InputAction::ScrollRight
         ) {
             self.preferred_x = None;
+            self.cursor_affinity = CursorAffinity::Downstream;
         }
 
         // Reset Ctrl+A escalation on any non-SelectAll action
         if !matches!(action, InputAction::SelectAll) {
             self.select_all_level = 0;
+            self.select_all_anchor_cell = None;
         }
 
         // Flush any buffered characters before processing a non-char action
@@ -564,21 +641,18 @@ impl IControl for RichTextEdit {
             }
             InputAction::Backspace => {
                 if let Some(cursor) = &self.cursor {
-                    if cursor.at_block_start() && self.is_cursor_in_list() {
+                    if cursor.at_block_start()
+                        && let Some(list) = cursor.current_list()
+                    {
                         // Backspace at start of list item:
-                        // - If indented: decrease indent (Qt: QTextBlockFormat::setIndent)
-                        // - If at indent 0: remove from list (Qt: QTextList::remove(QTextBlock))
-                        if let Ok(fmt) = cursor.block_format() {
-                            let level = fmt.indent.unwrap_or(0);
-                            if level > 0 {
-                                let new_fmt = text_document::BlockFormat {
-                                    indent: Some(level - 1),
-                                    ..Default::default()
-                                };
-                                let _ = cursor.set_block_format(&new_fmt);
-                            } else {
-                                let _ = cursor.remove_current_block_from_list();
-                            }
+                        // - If indented: split into a shallower list (so the
+                        //   item dedents on its own, not its siblings).
+                        // - If at indent 0: remove from list entirely.
+                        let level = list.indent();
+                        if level > 0 {
+                            Self::nest_current_list_item(cursor, level - 1);
+                        } else {
+                            let _ = cursor.remove_current_block_from_list();
                         }
                     } else {
                         let _ = cursor.delete_previous_char();
@@ -607,15 +681,8 @@ impl IControl for RichTextEdit {
                     if let Some(cell_ref) = cursor.current_table_cell() {
                         // Tab in table: move to next cell
                         self.navigate_table_cell(&cell_ref, 1);
-                    } else if cursor.at_block_start() && self.is_cursor_in_list() {
-                        if let Ok(fmt) = cursor.block_format() {
-                            let level = fmt.indent.unwrap_or(0);
-                            let new_fmt = text_document::BlockFormat {
-                                indent: Some(level + 1),
-                                ..Default::default()
-                            };
-                            let _ = cursor.set_block_format(&new_fmt);
-                        }
+                    } else if let Some(list) = cursor.current_list() {
+                        Self::nest_current_list_item(cursor, list.indent().saturating_add(1));
                     } else {
                         let _ = cursor.insert_text("\t");
                     }
@@ -626,16 +693,10 @@ impl IControl for RichTextEdit {
                     if let Some(cell_ref) = cursor.current_table_cell() {
                         // Shift+Tab in table: move to previous cell
                         self.navigate_table_cell(&cell_ref, -1);
-                    } else if self.is_cursor_in_list()
-                        && let Ok(fmt) = cursor.block_format()
-                    {
-                        let level = fmt.indent.unwrap_or(0);
+                    } else if let Some(list) = cursor.current_list() {
+                        let level = list.indent();
                         if level > 0 {
-                            let new_fmt = text_document::BlockFormat {
-                                indent: Some(level - 1),
-                                ..Default::default()
-                            };
-                            let _ = cursor.set_block_format(&new_fmt);
+                            Self::nest_current_list_item(cursor, level - 1);
                         }
                     }
                 }
@@ -662,8 +723,10 @@ impl IControl for RichTextEdit {
                 self.move_cursor(MoveOperation::Start, MoveMode::MoveAnchor)
             }
             InputAction::MoveDocEnd => self.move_cursor(MoveOperation::End, MoveMode::MoveAnchor),
-            InputAction::PageUp => self.move_cursor_page(-1),
-            InputAction::PageDown => self.move_cursor_page(1),
+            InputAction::PageUp => self.move_cursor_page(-1, MoveMode::MoveAnchor),
+            InputAction::PageDown => self.move_cursor_page(1, MoveMode::MoveAnchor),
+            InputAction::SelectPageUp => self.move_cursor_page(-1, MoveMode::KeepAnchor),
+            InputAction::SelectPageDown => self.move_cursor_page(1, MoveMode::KeepAnchor),
 
             // Selection (with cell selection support for tables)
             InputAction::SelectLeft => {
@@ -705,35 +768,47 @@ impl IControl for RichTextEdit {
             InputAction::SelectAll => {
                 if let Some(cursor) = &self.cursor {
                     let level = self.select_all_level + 1;
-                    let cell_ref = cursor.current_table_cell();
 
-                    if let Some(cell_ref) = cell_ref {
+                    // At level 1 snapshot the cell info so levels 2/3 don't
+                    // mis-fire when the level-1 selection straddles a cell
+                    // boundary (which can make `current_table_cell()` return
+                    // None on the next press).
+                    let cell_info: Option<SelectAllAnchorCell> = if level == 1 {
+                        cursor.current_table_cell().map(|c| SelectAllAnchorCell {
+                            table_id: c.table.id(),
+                            row: c.row,
+                            column: c.column,
+                            table_rows: c.table.rows(),
+                            table_columns: c.table.columns(),
+                        })
+                    } else {
+                        self.select_all_anchor_cell
+                    };
+
+                    if let Some(cell) = cell_info {
+                        if level == 1 {
+                            self.select_all_anchor_cell = Some(cell);
+                        }
                         match level {
                             1 => cursor.select(SelectionType::BlockUnderCursor),
-                            2 => cursor.select_table_cell(
-                                cell_ref.table.id(),
-                                cell_ref.row,
-                                cell_ref.column,
+                            2 => cursor.select_table_cell(cell.table_id, cell.row, cell.column),
+                            3 => cursor.select_cell_range(
+                                cell.table_id,
+                                0,
+                                0,
+                                cell.table_rows.saturating_sub(1),
+                                cell.table_columns.saturating_sub(1),
                             ),
-                            3 => {
-                                let rows = cell_ref.table.rows();
-                                let cols = cell_ref.table.columns();
-                                cursor.select_cell_range(
-                                    cell_ref.table.id(),
-                                    0,
-                                    0,
-                                    if rows > 0 { rows - 1 } else { 0 },
-                                    if cols > 0 { cols - 1 } else { 0 },
-                                );
-                            }
-                            _ => {
-                                cursor.select(SelectionType::Document);
-                            }
+                            _ => cursor.select(SelectionType::Document),
                         }
                         self.select_all_level = if level >= 4 { 0 } else { level };
+                        if self.select_all_level == 0 {
+                            self.select_all_anchor_cell = None;
+                        }
                     } else {
                         cursor.select(SelectionType::Document);
                         self.select_all_level = 0;
+                        self.select_all_anchor_cell = None;
                     }
 
                     self.update_cursor_display();
@@ -750,6 +825,10 @@ impl IControl for RichTextEdit {
                 }
             }
             InputAction::Paste => self.clipboard_paste(),
+            InputAction::PasteUnformatted => self.clipboard_paste_unformatted(),
+            InputAction::EndDrag => {
+                self.drag_autoscroll_v_per_s = 0.0;
+            }
 
             // Undo/redo
             InputAction::Undo => {
@@ -893,8 +972,13 @@ impl IControl for RichTextEdit {
             self.base_mut().queue_redraw();
         } else if what == ControlNotification::FOCUS_EXIT {
             DisplayServer::singleton().window_set_ime_active(false);
+            // Cancel any in-flight composition so we don't leave tentative
+            // preedit text in the document when focus moves away.
+            self.cancel_ime_preedit();
             self.update_cursor_display();
             self.base_mut().queue_redraw();
+        } else if what == ControlNotification::OS_IME_UPDATE {
+            self.handle_ime_update();
         }
     }
 }
@@ -1039,6 +1123,7 @@ impl RichTextEdit {
     fn set_caret_position(&mut self, pos: i32) {
         if let Some(cursor) = &self.cursor {
             cursor.set_position(pos as usize, MoveMode::MoveAnchor);
+            self.cursor_affinity = CursorAffinity::Downstream;
             self.update_cursor_display();
         }
     }
@@ -1192,6 +1277,40 @@ impl RichTextEdit {
         }
     }
 
+    /// Apply an arbitrary [`text_document::TextFormat`] to the current selection.
+    ///
+    /// Recognised Dictionary keys (any subset; unknown keys are ignored):
+    /// `font_family` (String), `font_point_size` (int), `font_weight` (int),
+    /// `font_bold` / `font_italic` / `font_underline` / `font_overline` /
+    /// `font_strikeout` (bool), `letter_spacing` / `word_spacing` (int),
+    /// `foreground_color` / `background_color` / `underline_color` (Color),
+    /// `anchor_href` / `tooltip` (String).
+    #[func]
+    fn apply_text_format(&mut self, fmt: VarDictionary) {
+        let Some(cursor) = &self.cursor else {
+            return;
+        };
+        let f = build_text_format(&fmt);
+        let _ = cursor.merge_char_format(&f);
+    }
+
+    /// Apply an arbitrary [`text_document::BlockFormat`] to the current block(s).
+    ///
+    /// Recognised Dictionary keys (any subset; unknown keys are ignored):
+    /// `alignment` (int 0–3), `heading_level` (int 0–6), `indent` (int),
+    /// `top_margin` / `bottom_margin` / `left_margin` / `right_margin` /
+    /// `text_indent` (int), `line_height` (float), `non_breakable_lines` (bool),
+    /// `background_color` (String, CSS-style hex), `is_code_block` (bool),
+    /// `code_language` (String).
+    #[func]
+    fn apply_block_format(&mut self, fmt: VarDictionary) {
+        let Some(cursor) = &self.cursor else {
+            return;
+        };
+        let f = build_block_format(&fmt);
+        let _ = cursor.set_block_format(&f);
+    }
+
     // --- Lists ---
 
     #[func]
@@ -1270,6 +1389,80 @@ impl RichTextEdit {
             .as_ref()
             .and_then(|c| c.current_table())
             .is_some()
+    }
+
+    /// Classify what's under a widget-local point, for hosts that build their
+    /// own right-click menu. Returns a Dictionary with a `"kind"` key set to
+    /// one of `"none"`, `"plain"`, `"in_selection"`, `"link"`, `"image"`,
+    /// `"table_cell"`, plus payload keys:
+    /// - link: `"href"` (String)
+    /// - image: `"name"` (String)
+    /// - table_cell: `"table_id"`, `"row"`, `"col"` (ints)
+    ///
+    /// `"in_selection"` takes precedence over link/image/cell when the hit
+    /// position is inside the current selection range — host menus typically
+    /// want Cut/Copy/Paste in that case rather than link-specific actions.
+    #[func]
+    fn context_target_at(&self, point: Vector2) -> VarDictionary {
+        let mut out = VarDictionary::new();
+        let Some(ts) = &self.typesetter else {
+            out.set("kind", "none");
+            return out;
+        };
+        let zoom = ts.zoom();
+        let hx = point.x + self.h_scroll_offset * zoom;
+        let Some(hit) = ts.hit_test(hx, point.y) else {
+            out.set("kind", "none");
+            return out;
+        };
+
+        // InSelection takes precedence.
+        if let Some(cursor) = &self.cursor
+            && cursor.has_selection()
+        {
+            let (lo, hi) = {
+                let a = cursor.anchor();
+                let p = cursor.position();
+                (a.min(p), a.max(p))
+            };
+            if lo != hi && hit.position >= lo && hit.position <= hi {
+                out.set("kind", "in_selection");
+                return out;
+            }
+        }
+
+        match &hit.region {
+            HitRegion::Link { href } => {
+                out.set("kind", "link");
+                out.set("href", href.as_str());
+                return out;
+            }
+            HitRegion::Image { name } => {
+                out.set("kind", "image");
+                out.set("name", name.as_str());
+                return out;
+            }
+            _ => {}
+        }
+
+        if let Some(table_id) = hit.table_id
+            && let Some(doc) = &self.document
+        {
+            let probe = doc.cursor();
+            probe.set_position(hit.position, MoveMode::MoveAnchor);
+            let (row, col) = probe
+                .current_table_cell()
+                .map(|c| (c.row, c.column))
+                .unwrap_or((0, 0));
+            out.set("kind", "table_cell");
+            out.set("table_id", table_id as i64);
+            out.set("row", row as i64);
+            out.set("col", col as i64);
+            return out;
+        }
+
+        out.set("kind", "plain");
+        out
     }
 
     // --- Undo / Redo ---
@@ -1570,10 +1763,70 @@ impl RichTextEdit {
         }
     }
 
+    /// Handle a Godot `OS_IME_UPDATE` notification: read the current preedit
+    /// from the OS, remove our previous tentative insertion, and insert the
+    /// new preedit at the same anchor. Empty preedit means the composition
+    /// committed or was cancelled — we remove the tentative text and let any
+    /// follow-up `InputEventKey` deliver the committed unicode chars at the
+    /// now-cleared position.
+    fn handle_ime_update(&mut self) {
+        let Some(cursor) = self.cursor.clone() else {
+            return;
+        };
+        let new_preedit = DisplayServer::singleton().ime_get_text().to_string();
+
+        cursor.begin_edit_block();
+
+        // Remove the previous tentative preedit, if any.
+        if let Some(anchor) = self.ime_preedit_anchor {
+            let old_len = self.ime_preedit_text.chars().count();
+            if old_len > 0 {
+                cursor.set_position(anchor, MoveMode::MoveAnchor);
+                cursor.set_position(anchor + old_len, MoveMode::KeepAnchor);
+                let _ = cursor.remove_selected_text();
+            }
+        }
+
+        // Insert the new tentative preedit, if any.
+        if !new_preedit.is_empty() {
+            let anchor = cursor.position();
+            let _ = cursor.insert_text(&new_preedit);
+            self.ime_preedit_text = new_preedit;
+            self.ime_preedit_anchor = Some(anchor);
+        } else {
+            self.ime_preedit_text.clear();
+            self.ime_preedit_anchor = None;
+        }
+
+        cursor.end_edit_block();
+        self.update_cursor_display();
+        self.needs_redraw = true;
+    }
+
+    /// Drop any in-flight IME preedit text from the document. Called when
+    /// focus is lost so we never leave tentative text behind.
+    fn cancel_ime_preedit(&mut self) {
+        let Some(anchor) = self.ime_preedit_anchor.take() else {
+            return;
+        };
+        let old_len = self.ime_preedit_text.chars().count();
+        self.ime_preedit_text.clear();
+        if old_len == 0 {
+            return;
+        }
+        if let Some(cursor) = self.cursor.clone() {
+            cursor.begin_edit_block();
+            cursor.set_position(anchor, MoveMode::MoveAnchor);
+            cursor.set_position(anchor + old_len, MoveMode::KeepAnchor);
+            let _ = cursor.remove_selected_text();
+            cursor.end_edit_block();
+        }
+    }
+
     /// Update IME composition window position to match the caret.
     fn update_ime_position(&self) {
         if let (Some(cursor), Some(ts)) = (&self.cursor, &self.typesetter) {
-            let caret = ts.caret_rect(cursor.position());
+            let caret = ts.caret_rect(cursor.position(), self.cursor_affinity);
             // caret is [x, y, w, h] in screen-space (scroll-adjusted)
             // Convert to global screen position for IME
             let local_pos = Vector2::new(
@@ -1588,14 +1841,25 @@ impl RichTextEdit {
         }
     }
 
-    fn is_cursor_in_list(&self) -> bool {
-        if let (Some(cursor), Some(doc)) = (&self.cursor, &self.document) {
-            let pos = cursor.position();
-            if let Some(block) = doc.block_at_position(pos) {
-                return block.list().is_some();
-            }
-        }
-        false
+    /// Move the current list item into its own list at `target_indent`,
+    /// preserving the parent list's style. `ListFormat::indent` applies to
+    /// the whole list, so bumping it would shift every sibling — to indent
+    /// just the current item (Word / Google Docs / Notion behaviour) we take
+    /// it out of the current list and put it in a fresh list at the target
+    /// depth. Wrapped in begin/end_edit_block so it lands as one undo step.
+    fn nest_current_list_item(cursor: &TextCursor, target_indent: u8) {
+        let Some(list) = cursor.current_list() else {
+            return;
+        };
+        let style = list.style();
+        cursor.begin_edit_block();
+        let _ = cursor.remove_current_block_from_list();
+        let _ = cursor.create_list(style);
+        let _ = cursor.set_current_list_format(&text_document::ListFormat {
+            indent: Some(target_indent),
+            ..Default::default()
+        });
+        cursor.end_edit_block();
     }
 
     fn move_cursor(&mut self, op: MoveOperation, mode: MoveMode) {
@@ -1618,7 +1882,7 @@ impl RichTextEdit {
         };
 
         let pos = cursor.position();
-        let caret = ts.caret_rect(pos);
+        let caret = ts.caret_rect(pos, self.cursor_affinity);
         let line_height = caret[3].max(16.0);
         let center_y = caret[1] + caret[3] / 2.0;
 
@@ -1641,7 +1905,7 @@ impl RichTextEdit {
             self.scroll_offset = (self.scroll_offset - scroll_delta).max(0.0);
             ts.set_scroll_offset(self.scroll_offset);
             // Re-probe after scroll adjustment
-            let new_caret = ts.caret_rect(pos);
+            let new_caret = ts.caret_rect(pos, self.cursor_affinity);
             let new_center_y = new_caret[1] + new_caret[3] / 2.0;
             target_y = new_center_y + (direction as f32) * line_height;
         }
@@ -1656,6 +1920,7 @@ impl RichTextEdit {
             && hit.position != pos
         {
             cursor.set_position(hit.position, mode);
+            self.cursor_affinity = hit.affinity;
             self.update_cursor_display();
             self.base_mut().emit_signal("caret_changed", &[]);
             if mode == MoveMode::KeepAnchor {
@@ -1665,7 +1930,7 @@ impl RichTextEdit {
     }
 
     /// Move the cursor up or down by roughly one viewport page.
-    fn move_cursor_page(&mut self, direction: i32) {
+    fn move_cursor_page(&mut self, direction: i32, mode: MoveMode) {
         let view_height = self.base().get_size().y;
         let Some(cursor) = &self.cursor else { return };
         let Some(ts) = &mut self.typesetter else {
@@ -1673,7 +1938,7 @@ impl RichTextEdit {
         };
 
         let pos = cursor.position();
-        let caret = ts.caret_rect(pos);
+        let caret = ts.caret_rect(pos, self.cursor_affinity);
         let line_height = caret[3].max(16.0);
         let center_y = caret[1] + caret[3] / 2.0;
 
@@ -1705,9 +1970,13 @@ impl RichTextEdit {
         if let Some(hit) = ts.hit_test(x, target_y)
             && hit.position != pos
         {
-            cursor.set_position(hit.position, MoveMode::MoveAnchor);
+            cursor.set_position(hit.position, mode);
+            self.cursor_affinity = hit.affinity;
             self.update_cursor_display();
             self.base_mut().emit_signal("caret_changed", &[]);
+            if mode == MoveMode::KeepAnchor {
+                self.base_mut().emit_signal("selection_changed", &[]);
+            }
         }
     }
 
@@ -1719,7 +1988,7 @@ impl RichTextEdit {
             ts.set_cursor(&CursorDisplay {
                 position: cursor.position(),
                 anchor: cursor.anchor(),
-                affinity: CursorAffinity::Downstream,
+                affinity: self.cursor_affinity,
                 visible,
                 selected_cells,
             });
@@ -1825,26 +2094,40 @@ impl RichTextEdit {
         true
     }
 
-    /// Handle drag-select with auto-scrolling when mouse is above/below viewport.
+    /// Handle drag-select. Updates the selection to track the mouse and
+    /// computes an autoscroll velocity (px/s) used per-frame in `process()`
+    /// so dragging against a viewport edge keeps scrolling even when the
+    /// mouse is stationary.
     fn handle_drag_select(&mut self, mouse_pos: Vector2) {
-        let view_height = self.base().get_size().y;
-        let auto_scroll_margin = 20.0;
-        let auto_scroll_speed = 60.0;
+        self.drag_last_mouse_pos = mouse_pos;
+        self.drag_autoscroll_v_per_s =
+            Self::compute_drag_velocity(mouse_pos.y, self.base().get_size().y);
+        self.apply_drag_selection_at(mouse_pos);
+    }
 
-        // Auto-scroll if mouse is near/past viewport edges
-        if mouse_pos.y < auto_scroll_margin {
-            // Mouse above viewport, scroll up
-            let intensity = (auto_scroll_margin - mouse_pos.y) / auto_scroll_margin;
-            self.scroll_by(-auto_scroll_speed * intensity);
-        } else if mouse_pos.y > view_height - auto_scroll_margin {
-            // Mouse below viewport, scroll down
-            let intensity = (mouse_pos.y - (view_height - auto_scroll_margin)) / auto_scroll_margin;
-            self.scroll_by(auto_scroll_speed * intensity);
+    /// Compute drag autoscroll velocity in document px/s from the mouse Y
+    /// position relative to the viewport. Returns 0 inside the viewport
+    /// interior; a ramped magnitude up to ±3600 px/s within a 20 px
+    /// edge margin (or beyond, when the mouse is past the edge).
+    fn compute_drag_velocity(mouse_y: f32, view_height: f32) -> f32 {
+        const MARGIN: f32 = 20.0;
+        const MAX_V: f32 = 3600.0;
+        if mouse_y < MARGIN {
+            -((MARGIN - mouse_y) / MARGIN).clamp(0.0, 1.0) * MAX_V
+        } else if mouse_y > view_height - MARGIN {
+            ((mouse_y - (view_height - MARGIN)) / MARGIN).clamp(0.0, 1.0) * MAX_V
+        } else {
+            0.0
         }
+    }
 
-        // Clamp the hit-test Y to the visible content area
+    /// Hit-test at the supplied mouse position and extend the selection to
+    /// the resolved document offset. Y is clamped to the visible content
+    /// area so a mouse beyond the viewport edge still resolves to a real
+    /// glyph row.
+    fn apply_drag_selection_at(&mut self, mouse_pos: Vector2) {
+        let view_height = self.base().get_size().y;
         let clamped_y = mouse_pos.y.clamp(2.0, view_height - 2.0);
-
         let zoom = self.typesetter.as_ref().map(|ts| ts.zoom()).unwrap_or(1.0);
         let hx = mouse_pos.x + self.h_scroll_offset * zoom;
         let hit = self
@@ -1856,6 +2139,7 @@ impl RichTextEdit {
             && let Some(cursor) = &self.cursor
         {
             cursor.set_position(hit.position, MoveMode::KeepAnchor);
+            self.cursor_affinity = hit.affinity;
             self.update_cursor_display();
         }
     }
@@ -1895,6 +2179,7 @@ impl RichTextEdit {
                 MoveMode::MoveAnchor
             };
             cursor.set_position(hit.position, mode);
+            self.cursor_affinity = hit.affinity;
             self.update_cursor_display();
         }
     }
@@ -1941,7 +2226,7 @@ impl RichTextEdit {
         let Some(cursor) = &self.cursor else { return };
         let Some(ts) = &self.typesetter else { return };
         let zoom = ts.zoom();
-        let caret = ts.caret_rect(cursor.position());
+        let caret = ts.caret_rect(cursor.position(), self.cursor_affinity);
         let caret_x = caret[0]; // zoomed screen-space X
         let view_width = self.base().get_size().x;
         let margin = 20.0;
@@ -2083,7 +2368,15 @@ impl RichTextEdit {
         let Some(cursor) = &self.cursor else { return };
         let system_text = DisplayServer::singleton().clipboard_get().to_string();
 
-        // If system clipboard matches what we copied, paste the fragment directly
+        // Self-round-trip detection: Godot's DisplayServer only exposes the
+        // plain-text clipboard (no HTML payload), so we cannot embed an HTML
+        // comment marker the way bastyde does. We fall back to plain-text
+        // equality: if the system clipboard text exactly matches what we last
+        // wrote and we still hold the fragment, restore the fragment. The
+        // residual false-positive case — another app happens to publish the
+        // same plain text — is harmless because the inserted text is identical.
+        // If system_text differs, we drop our cached fragment to avoid
+        // ambiguous later pastes.
         if let (Some(fragment), Some(our_plain)) =
             (&self.rich_clipboard_fragment, &self.rich_clipboard_plain)
             && system_text == *our_plain
@@ -2094,11 +2387,45 @@ impl RichTextEdit {
             return;
         }
 
-        // Otherwise paste plain text from system clipboard
+        // Otherwise paste plain text from system clipboard, splitting newlines
+        // into separate blocks. Also drop our cached rich fragment so a later
+        // paste of *new* external text identical to our last copy doesn't
+        // mis-fire.
+        self.rich_clipboard_fragment = None;
+        self.rich_clipboard_plain = None;
         if !system_text.is_empty() {
-            let _ = cursor.insert_text(&system_text);
+            Self::insert_plain_multiline(cursor, &system_text);
             cursor.clear_selection();
             self.update_cursor_display();
+        }
+    }
+
+    /// Paste the system clipboard as plain text, ignoring any in-process
+    /// rich fragment. Bound to Ctrl+Shift+V.
+    fn clipboard_paste_unformatted(&mut self) {
+        let Some(cursor) = &self.cursor else { return };
+        let system_text = DisplayServer::singleton().clipboard_get().to_string();
+        if system_text.is_empty() {
+            return;
+        }
+        Self::insert_plain_multiline(cursor, &system_text);
+        cursor.clear_selection();
+        self.update_cursor_display();
+    }
+
+    /// Insert plain text, splitting `\r\n` / `\n` / `\r` line breaks into
+    /// separate blocks via `insert_block`.
+    fn insert_plain_multiline(cursor: &TextCursor, text: &str) {
+        let normalised = text.replace("\r\n", "\n").replace('\r', "\n");
+        let mut first = true;
+        for line in normalised.split('\n') {
+            if !first {
+                let _ = cursor.insert_block();
+            }
+            if !line.is_empty() {
+                let _ = cursor.insert_text(line);
+            }
+            first = false;
         }
     }
 
@@ -2130,5 +2457,98 @@ impl RichTextEdit {
             .and_then(|f| f.font_underline)
             .unwrap_or(false);
         self.set_underline(!current);
+    }
+}
+
+fn color_from_dict(dict: &VarDictionary, key: &str) -> Option<text_document::Color> {
+    let v = dict.get(key)?;
+    let c: Color = v.try_to().ok()?;
+    Some(text_document::Color {
+        red: (c.r.clamp(0.0, 1.0) * 255.0).round() as u8,
+        green: (c.g.clamp(0.0, 1.0) * 255.0).round() as u8,
+        blue: (c.b.clamp(0.0, 1.0) * 255.0).round() as u8,
+        alpha: (c.a.clamp(0.0, 1.0) * 255.0).round() as u8,
+    })
+}
+
+fn string_from_dict(dict: &VarDictionary, key: &str) -> Option<String> {
+    let v = dict.get(key)?;
+    v.try_to::<GString>().ok().map(|s| s.to_string())
+}
+
+fn bool_from_dict(dict: &VarDictionary, key: &str) -> Option<bool> {
+    let v = dict.get(key)?;
+    v.try_to::<bool>().ok()
+}
+
+fn i32_from_dict(dict: &VarDictionary, key: &str) -> Option<i32> {
+    let v = dict.get(key)?;
+    v.try_to::<i64>().ok().map(|n| n as i32)
+}
+
+fn u32_from_dict(dict: &VarDictionary, key: &str) -> Option<u32> {
+    let v = dict.get(key)?;
+    v.try_to::<i64>().ok().and_then(|n| u32::try_from(n).ok())
+}
+
+fn u8_from_dict(dict: &VarDictionary, key: &str) -> Option<u8> {
+    let v = dict.get(key)?;
+    v.try_to::<i64>().ok().and_then(|n| u8::try_from(n).ok())
+}
+
+fn f32_from_dict(dict: &VarDictionary, key: &str) -> Option<f32> {
+    let v = dict.get(key)?;
+    v.try_to::<f64>().ok().map(|n| n as f32)
+}
+
+fn build_text_format(dict: &VarDictionary) -> text_document::TextFormat {
+    text_document::TextFormat {
+        font_family: string_from_dict(dict, "font_family"),
+        font_point_size: u32_from_dict(dict, "font_point_size"),
+        font_weight: u32_from_dict(dict, "font_weight"),
+        font_bold: bool_from_dict(dict, "font_bold"),
+        font_italic: bool_from_dict(dict, "font_italic"),
+        font_underline: bool_from_dict(dict, "font_underline"),
+        font_overline: bool_from_dict(dict, "font_overline"),
+        font_strikeout: bool_from_dict(dict, "font_strikeout"),
+        letter_spacing: i32_from_dict(dict, "letter_spacing"),
+        word_spacing: i32_from_dict(dict, "word_spacing"),
+        underline_style: None,
+        vertical_alignment: None,
+        anchor_href: string_from_dict(dict, "anchor_href"),
+        anchor_names: Vec::new(),
+        is_anchor: None,
+        tooltip: string_from_dict(dict, "tooltip"),
+        foreground_color: color_from_dict(dict, "foreground_color"),
+        background_color: color_from_dict(dict, "background_color"),
+        underline_color: color_from_dict(dict, "underline_color"),
+    }
+}
+
+fn build_block_format(dict: &VarDictionary) -> text_document::BlockFormat {
+    let alignment = i32_from_dict(dict, "alignment").map(|a| match a {
+        0 => text_document::Alignment::Left,
+        1 => text_document::Alignment::Center,
+        2 => text_document::Alignment::Right,
+        3 => text_document::Alignment::Justify,
+        _ => text_document::Alignment::Left,
+    });
+    text_document::BlockFormat {
+        alignment,
+        top_margin: i32_from_dict(dict, "top_margin"),
+        bottom_margin: i32_from_dict(dict, "bottom_margin"),
+        left_margin: i32_from_dict(dict, "left_margin"),
+        right_margin: i32_from_dict(dict, "right_margin"),
+        heading_level: u8_from_dict(dict, "heading_level"),
+        indent: u8_from_dict(dict, "indent"),
+        text_indent: i32_from_dict(dict, "text_indent"),
+        marker: None,
+        tab_positions: Vec::new(),
+        line_height: f32_from_dict(dict, "line_height"),
+        non_breakable_lines: bool_from_dict(dict, "non_breakable_lines"),
+        direction: None,
+        background_color: string_from_dict(dict, "background_color"),
+        is_code_block: bool_from_dict(dict, "is_code_block"),
+        code_language: string_from_dict(dict, "code_language"),
     }
 }

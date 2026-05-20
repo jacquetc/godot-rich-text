@@ -700,7 +700,7 @@ impl RichTextView {
         let Some(ts) = &self.typesetter else { return };
 
         let pos = cursor.position();
-        let caret = ts.caret_rect(pos);
+        let caret = ts.caret_rect(pos, CursorAffinity::Downstream);
         let line_height = caret[3].max(16.0);
         let center_y = caret[1] + caret[3] / 2.0;
 

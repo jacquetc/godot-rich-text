@@ -228,9 +228,8 @@ impl Typesetter {
         self.flow.character_geometry(block_id, char_start, char_end)
     }
 
-    pub fn caret_rect(&self, position: usize) -> [f32; 4] {
-        self.flow
-            .caret_rect(position, text_typeset::CursorAffinity::Downstream)
+    pub fn caret_rect(&self, position: usize, affinity: text_typeset::CursorAffinity) -> [f32; 4] {
+        self.flow.caret_rect(position, affinity)
     }
 
     // ── Cursor & colors ───────────────────────────────────────
